@@ -1,0 +1,1181 @@
+{
+  "name": "CCD - Chatbot flujo principal (MVP mejorado)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      },
+      "id": "ccd-mejorado-0001",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        360
+      ],
+      "webhookId": "ccd-telegram-trigger-mejorado",
+      "notes": "Asignar credencial Telegram CCD Bot.",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram CCD Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $json.message || {};\nconst chat = msg.chat || {};\nconst from = msg.from || {};\n\nconst preguntaOriginal = msg.text || $json.pregunta || \"\";\n\nconst limpiarTexto = (texto) => {\n  return String(texto || \"\")\n    .toLowerCase()\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .replace(/[¿?¡!.,;:()\\[\\]{}\\\"]/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n};\n\nconst preguntaNormalizada = limpiarTexto(preguntaOriginal);\n\nconst palabras = preguntaNormalizada\n  ? preguntaNormalizada.split(\" \").filter(Boolean)\n  : [];\n\nconst codigoUnabMatch = preguntaOriginal.match(/\\b[uU]\\d{8}\\b/);\nconst idNumericoMatch = preguntaOriginal.match(/\\b\\d{8,10}\\b/);\n\nreturn [\n  {\n    json: {\n      pregunta_original: preguntaOriginal,\n      pregunta_normalizada: preguntaNormalizada,\n      palabras,\n      longitud_texto: preguntaOriginal.length,\n      cantidad_palabras: palabras.length,\n\n      chat_id: chat.id,\n      telegram_user_id: from.id,\n      username: from.username || null,\n      first_name: from.first_name || null,\n      last_name: from.last_name || null,\n\n      canal: \"telegram\",\n\n      codigo_unab_detectado: codigoUnabMatch ? codigoUnabMatch[0].toUpperCase() : null,\n      id_estudiante_detectado: idNumericoMatch ? idNumericoMatch[0] : null,\n      tiene_codigo_detectado: !!codigoUnabMatch || !!idNumericoMatch,\n\n      fecha_mensaje: new Date().toISOString()\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0002",
+      "name": "Code - Normalizar pregunta avanzada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $input.first().json;\nconst p = base.pregunta_normalizada || \"\";\nconst palabras = base.palabras || [];\n\nconst contexto = {\n  es_mensaje_vacio: !p,\n  es_mensaje_corto: palabras.length > 0 && palabras.length <= 2,\n  posible_saludo: /\\b(hola|buenas|buenos dias|buenas tardes|buenas noches|buen dia)\\b/.test(p),\n  posible_agradecimiento: /\\b(gracias|muchas gracias|mil gracias|te agradezco|muy amable)\\b/.test(p),\n  posible_despedida: /\\b(chao|adios|hasta luego|nos vemos|hasta pronto|feliz dia)\\b/.test(p),\n  posible_prioridad: /\\b(urgente|rapido|necesito ya|lo antes posible|emergencia)\\b/.test(p),\n  menciona_google_calendar: /\\b(google calendar|calendar|agenda|agenda ccd|agenda del ccd|actividades del ccd|actividades proximas|actividades próximas|eventos proximos|eventos próximos|proximas actividades|próximas actividades|que actividades hay|qué actividades hay|que eventos hay|qué eventos hay)\\b/.test(p),\n  menciona_fecha: /\\b(cuando|fecha|fechas|calendario|cronograma|inscripcion|inscripciones|inicio|evento|eventos|prueba diagnostica)\\b/.test(p),\n  menciona_historial: /\\b(mis cursos|he tomado|historial|cursos realizados|cursos vistos|avance|mi ruta)\\b/.test(p),\n  tiene_codigo: base.tiene_codigo_detectado\n};\n\nlet respuesta_contextual = null;\n\nif (contexto.es_mensaje_vacio) {\n  respuesta_contextual = \"Claro, con gusto te ayudo. ¿Me puedes escribir tu pregunta sobre el CCD, cursos, calendario, eventos, noticias o ruta CCD?\";\n} else if (contexto.posible_prioridad && palabras.length <= 4) {\n  respuesta_contextual = \"Entiendo que es urgente. Cuéntame un poco más para orientarte mejor. También puedes contactar el canal oficial del CCD si necesitas atención administrativa inmediata.\";\n}\n\nreturn [\n  {\n    json: {\n      ...base,\n      contexto_conversacional: contexto,\n      respuesta_contextual\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0003",
+      "name": "Code - Analizar contexto conversacional",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $json.pregunta_normalizada || \"\";\nconst palabras = $json.palabras || [];\nconst contexto = $json.contexto_conversacional || {};\n\nlet intencion = \"desconocido\";\nlet respuesta_directa = null;\n\nconst incluye = (...terms) => terms.some((term) => p.includes(term));\nconst esSolo = (...terms) => terms.includes(p);\n\nif (!p || palabras.length === 0) {\n  intencion = \"desconocido\";\n  respuesta_directa = $json.respuesta_contextual || \"Claro, con gusto te ayudo. ¿Me puedes escribir tu pregunta sobre cursos, calendario, eventos, noticias o ruta CCD?\";\n} else if (contexto.posible_agradecimiento) {\n  intencion = \"agradecimiento\";\n  respuesta_directa = \"Con mucho gusto. Si necesitas algo más sobre el CCD, aquí estaré para ayudarte.\";\n} else if (contexto.posible_despedida || esSolo(\"chao\", \"adios\", \"hasta luego\", \"nos vemos\")) {\n  intencion = \"despedida\";\n  respuesta_directa = \"Hasta luego. Que tengas un excelente día y muchos éxitos en tu ruta CCD.\";\n} else if (contexto.posible_saludo || esSolo(\"hola\", \"buenas\", \"buenos dias\", \"buenas tardes\", \"buenas noches\")) {\n  intencion = \"saludo\";\n  respuesta_directa = \"Hola, soy el asistente del Centro de Competencias Digitales. Puedo ayudarte con cursos, calendario, eventos, noticias, ruta CCD, certificaciones o tu historial académico.\";\n} else if (contexto.posible_prioridad && palabras.length <= 4) {\n  intencion = \"desconocido\";\n  respuesta_directa = $json.respuesta_contextual;\n} else if (incluye(\"que es el ccd\", \"centro de competencias digitales\")) {\n  intencion = \"faq_directa\";\n  respuesta_directa = \"El Centro de Competencias Digitales, CCD, acompaña el fortalecimiento de habilidades digitales en la comunidad universitaria mediante cursos y recursos sobre cultura digital, analítica, contenido digital y tecnologías transformativas.\";\n} else if (incluye(\"ruta de competencias digitales\", \"competencias digitales\")) {\n  intencion = \"faq_directa\";\n  respuesta_directa = \"La Ruta de Competencias Digitales está organizada por pilares de formación como Competencias Digitales Básicas, Analítica y Contenido Digital, y Tecnologías Transformativas.\";\n} else if (incluye(\"cuantos cursos\", \"cuantos debo tomar\", \"que cursos debo tomar\", \"cursos obligatorios\")) {\n  intencion = \"faq_directa\";\n  respuesta_directa = \"La ruta contempla un curso base de competencias digitales y cursos complementarios según el avance definido por el CCD. Para requisitos o certificación, puedo consultar la base documental.\";\n} else if (contexto.menciona_google_calendar) {\n  intencion = \"calendario_google\";\n} else if (contexto.menciona_fecha) {\n  intencion = \"calendario\";\n} else if (contexto.menciona_historial || contexto.tiene_codigo) {\n  intencion = \"cursos_estudiante\";\n} else if (incluye(\"noticias\", \"convocatorias\", \"nuevos cursos\", \"novedades\", \"actualidad\")) {\n  intencion = \"noticias\";\n} else if (incluye(\"oferta\", \"cursos disponibles\", \"catalogo\", \"analitica\", \"contenido digital\", \"tecnologias transformativas\", \"ia generativa\", \"inteligencia artificial\")) {\n  intencion = \"oferta_cursos\";\n} else if (incluye(\"insignia\", \"certificacion\", \"certificado\", \"ruta ccd\", \"certificacion ccd\", \"documento\", \"requisito\", \"requisitos\")) {\n  intencion = \"rag_documentos\";\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      intencion,\n      respuesta_directa\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0004",
+      "name": "Code - Detectar intención avanzada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "faq_directa",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "faq_directa"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "saludo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "saludo"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "agradecimiento",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "agradecimiento"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "despedida",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "despedida"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "calendario",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendario"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "calendario_google",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendario_google"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "oferta_cursos",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "oferta_cursos"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "cursos_estudiante",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "cursos_estudiante"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "noticias",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "noticias"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "rag_documentos",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "rag_documentos"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intencion }}",
+                    "rightValue": "desconocido",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "desconocido"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "desconocido"
+        }
+      },
+      "id": "ccd-mejorado-0005",
+      "name": "Switch - Intencion",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1040,
+        360
+      ],
+      "notes": "Salidas: faq_directa, saludo, agradecimiento, despedida, calendario, calendario_google, oferta_cursos, cursos_estudiante, noticias, rag_documentos, desconocido."
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $input.first().json;\n\nreturn [\n  {\n    json: {\n      ...base,\n      respuesta: base.respuesta_directa || \"Con gusto. Puedo ayudarte con información del Centro de Competencias Digitales CCD.\"\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0006",
+      "name": "Code - Preparar respuesta directa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT evento, fecha_inicio, fecha_fin, descripcion\nFROM calendario_ccd\nWHERE activo = TRUE\nORDER BY fecha_inicio\nLIMIT 5;"
+      },
+      "id": "ccd-mejorado-0007",
+      "name": "PostgreSQL - Calendario",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1340,
+        260
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "PostgreSQL CCD"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = $('Code - Detectar intención avanzada').first().json;\nconst eventos = $input.all().map((i) => i.json).filter((e) => e.evento);\n\nlet respuesta;\n\nif (eventos.length === 0) {\n  respuesta = \"Por ahora no encontré eventos registrados en la base del calendario CCD. Puedes consultarme por eventos próximos del Google Calendar si está configurado.\";\n} else {\n  respuesta = \"Encontré estos registros del calendario CCD:\\n\\n\" + eventos.map((e) => {\n    let linea = `• ${e.evento} (${e.fecha_inicio || \"fecha por confirmar\"})`;\n    if (e.fecha_fin) linea += ` al ${e.fecha_fin}`;\n    if (e.descripcion) linea += `\\n  ${e.descripcion}`;\n    return linea;\n  }).join(\"\\n\\n\");\n}\n\nreturn [\n  {\n    json: {\n      ...base,\n      respuesta,\n      fuente_respuesta: \"postgres_calendario\"\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0008",
+      "name": "Code - Formatear calendario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "REEMPLAZA_CALENDAR_ID_CCD",
+          "mode": "id"
+        },
+        "returnAll": false,
+        "limit": 5,
+        "options": {
+          "timeMin": "={{ new Date().toISOString() }}",
+          "timeMax": "={{ new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "ccd-mejorado-0009",
+      "name": "Google Calendar - Consultar próximos eventos CCD",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1340,
+        420
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar CCD"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = $('Code - Detectar intención avanzada').first().json;\nconst eventos = $input.all().map(i => i.json).filter(e => e.summary || e.id);\n\nconst formatearFechaHora = (valor) => {\n  if (!valor) return \"fecha por confirmar\";\n\n  const fecha = new Date(valor);\n  if (isNaN(fecha.getTime())) return String(valor);\n\n  return fecha.toLocaleString(\"es-CO\", {\n    timeZone: \"America/Bogota\",\n    year: \"numeric\",\n    month: \"long\",\n    day: \"numeric\",\n    hour: \"2-digit\",\n    minute: \"2-digit\"\n  });\n};\n\nlet respuesta;\n\nif (eventos.length === 0) {\n  respuesta =\n    `Por ahora no encontré eventos próximos en el calendario del CCD. 📅\\n\\n` +\n    `Puedes volver a consultarme más adelante para revisar nuevas actividades.`;\n} else {\n  respuesta =\n    `Estos son los próximos eventos registrados en el calendario del CCD 📅:\\n\\n` +\n    eventos.map((e) => {\n      const titulo = e.summary || \"Evento sin título\";\n      const inicio = e.start?.dateTime || e.start?.date;\n      const fin = e.end?.dateTime || e.end?.date;\n\n      let linea = `• ${titulo}\\n  Inicio: ${formatearFechaHora(inicio)}`;\n\n      if (fin) {\n        linea += `\\n  Fin: ${formatearFechaHora(fin)}`;\n      }\n\n      if (e.location) {\n        linea += `\\n  Lugar: ${e.location}`;\n      }\n\n      if (e.htmlLink) {\n        linea += `\\n  Enlace: ${e.htmlLink}`;\n      }\n\n      return linea;\n    }).join(\"\\n\\n\") +\n    `\\n\\nSi quieres, también puedo ayudarte a revisar cursos disponibles o información de la ruta CCD.`;\n}\n\nreturn [\n  {\n    json: {\n      ...base,\n      respuesta,\n      fuente_respuesta: \"google_calendar\"\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0010",
+      "name": "Code - Formatear eventos Google Calendar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT nombre, categoria\nFROM cursos_ccd\nWHERE activo = TRUE\nORDER BY categoria, nombre;"
+      },
+      "id": "ccd-mejorado-0011",
+      "name": "PostgreSQL - Oferta cursos",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1340,
+        600
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "PostgreSQL CCD"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = $('Code - Detectar intención avanzada').first().json;\nconst cursos = $input.all().map((i) => i.json).filter((c) => c.nombre);\n\nlet respuesta;\n\nif (cursos.length === 0) {\n  respuesta = \"En este momento no encontré cursos activos registrados en la base del CCD.\";\n} else {\n  const grupos = cursos.reduce((acc, curso) => {\n    const categoria = curso.categoria || \"Sin categoría\";\n    acc[categoria] = acc[categoria] || [];\n    acc[categoria].push(curso.nombre);\n    return acc;\n  }, {});\n\n  respuesta = \"Esta es la oferta de cursos CCD que encontré:\\n\\n\" + Object.entries(grupos).map(([categoria, nombres]) => {\n    return `${categoria}:\\n${nombres.map((nombre) => `• ${nombre}`).join(\"\\n\")}`;\n  }).join(\"\\n\\n\");\n}\n\nreturn [{ json: { ...base, respuesta } }];"
+      },
+      "id": "ccd-mejorado-0012",
+      "name": "Code - Formatear oferta cursos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $input.first().json;\n\nreturn [\n  {\n    json: {\n      ...base,\n      codigo_unab: base.codigo_unab_detectado,\n      id_estudiante: base.id_estudiante_detectado,\n      tiene_codigo: base.tiene_codigo_detectado\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0013",
+      "name": "Code - Verificar codigo estudiante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        780
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-tiene-codigo",
+              "leftValue": "={{ $json.tiene_codigo }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ccd-mejorado-0014",
+      "name": "IF - Tiene codigo estudiante",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        780
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $input.first().json;\n\nreturn [\n  {\n    json: {\n      ...base,\n      respuesta:\n        `Claro 😊 Para consultar tus cursos realizados necesito validar tu información.\\n\\n` +\n        `Por favor envíame tu código UNAB o tu ID de estudiante.\\n\\n` +\n        `Ejemplos:\\n` +\n        `• U00175325\\n` +\n        `• 20240005\\n\\n` +\n        `Cuando me lo envíes, reviso tus cursos registrados en el CCD.`,\n      estado_conversacion: \"pendiente_codigo_estudiante\",\n      fuente_respuesta: \"solicitud_codigo_estudiante\"\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0015",
+      "name": "Code - Pedir codigo estudiante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    e.codigo_unab,\n    e.id_estudiante,\n    e.nombre_completo,\n    e.programa_academico,\n    e.semestre_actual,\n    ce.codigo_materia,\n    ce.nombre_materia,\n    ce.semestre,\n    ce.anio,\n    ce.fecha_matricula\nFROM cursos_estudiantes ce\nJOIN estudiante e ON e.id_estudiante = ce.id_estudiante\nWHERE \n    UPPER(e.codigo_unab) = UPPER($1)\n    OR e.id_estudiante::TEXT = $2\nORDER BY ce.anio, ce.codigo_curso;",
+        "options": {
+          "queryReplacement": "={{ $json.codigo_unab || '' }},{{ $json.id_estudiante || '' }}"
+        }
+      },
+      "id": "ccd-mejorado-0016",
+      "name": "PostgreSQL - Cursos estudiante",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1860,
+        720
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "PostgreSQL CCD Real"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = $('Code - Verificar codigo estudiante').first().json;\nconst cursos = $input.all().map((i) => i.json).filter((c) => c.nombre_materia);\n\nlet respuesta;\n\nif (cursos.length === 0) {\n  respuesta = \"No encontré cursos registrados para el código indicado. Revisa que el código esté bien escrito o intenta con tu ID de estudiante.\";\n} else {\n  const estudiante = cursos[0];\n  respuesta = `Encontré estos cursos CCD registrados para ${estudiante.nombre_completo}:\\n\\n` + cursos.map((c) => `• ${c.nombre_materia} (${c.semestre || \"semestre no registrado\"})`).join(\"\\n\");\n}\n\nreturn [{ json: { ...base, respuesta } }];"
+      },
+      "id": "ccd-mejorado-0017",
+      "name": "Code - Formatear cursos estudiante",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2120,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT titulo, fecha_publicacion, enlace\nFROM noticias_ccd\nWHERE activo = TRUE AND disponible_chatbot = TRUE\nORDER BY fecha_publicacion DESC\nLIMIT 3;"
+      },
+      "id": "ccd-mejorado-0018",
+      "name": "PostgreSQL - Noticias",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1340,
+        1040
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "PostgreSQL CCD"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = $('Code - Detectar intención avanzada').first().json;\nconst noticias = $input.all().map((n) => n.json).filter((n) => n.titulo);\n\nlet respuesta;\n\nif (noticias.length === 0) {\n  respuesta = \"Por ahora no encontré noticias disponibles en la base del CCD.\";\n} else {\n  respuesta = \"Estas son las noticias más recientes que encontré:\\n\\n\" + noticias.map((n) => `• ${n.titulo}${n.fecha_publicacion ? ` (${n.fecha_publicacion})` : \"\"}${n.enlace ? `\\n  ${n.enlace}` : \"\"}`).join(\"\\n\");\n}\n\nreturn [{ json: { ...base, respuesta } }];"
+      },
+      "id": "ccd-mejorado-0019",
+      "name": "Code - Formatear noticias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $input.first().json;\n\nreturn [\n  {\n    json: {\n      ...base,\n      query_rag: base.pregunta_original\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0020",
+      "name": "Code - Preparar pregunta RAG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        1220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REEMPLAZA_AQUI_TU_OPENROUTER_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: \"openai/text-embedding-3-small\", input: $json.query_rag }) }}",
+        "options": {}
+      },
+      "id": "ccd-mejorado-0021",
+      "name": "HTTP Request - OpenRouter Embedding pregunta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        1220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ `SELECT \n    dc.chunk_text,\n    dc.metadata,\n    dr.nombre_documento,\n    dr.categoria\nFROM document_chunks dc\nLEFT JOIN documentos_rag dr ON dr.id = dc.documento_id\nWHERE dc.embedding IS NOT NULL\nORDER BY dc.embedding <-> '${JSON.stringify($json.data[0].embedding)}'::vector\nLIMIT 5;` }}"
+      },
+      "id": "ccd-mejorado-0022",
+      "name": "PostgreSQL - Buscar chunks similares",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1860,
+        1220
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "name": "PostgreSQL CCD Real"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const base = $('Code - Detectar intención avanzada').first().json;\nconst chunks = $input.all().map((i) => i.json).filter((r) => r.chunk_text);\n\nlet contexto = chunks.map((r, idx) => {\n  const titulo = r.nombre_documento || r.metadata?.nombre_documento || r.metadata?.titulo || `Documento ${idx + 1}`;\n  const categoria = r.categoria || r.metadata?.categoria || \"CCD\";\n  return `Categoría: ${categoria}\\nTítulo: ${titulo}\\nContenido:\\n${r.chunk_text}`;\n}).join(\"\\n\\n---\\n\\n\");\n\nif (!contexto || contexto.trim().length === 0) {\n  contexto = \"No se encontraron fragmentos relevantes en la base documental.\";\n}\n\nreturn [{ json: { ...base, contexto } }];"
+      },
+      "id": "ccd-mejorado-0023",
+      "name": "Code - Armar contexto RAG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2120,
+        1220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REEMPLAZA_AQUI_TU_OPENROUTER_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "HTTP-Referer",
+              "value": "https://n8n-kjk94qcjczt2j9lpd371k3xg.68.211.160.49.sslip.io"
+            },
+            {
+              "name": "X-Title",
+              "value": "CCD UNAB Chatbot"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  model: \"deepseek/deepseek-chat-v3.1:free\",\n  messages: [\n    {\n      role: \"system\",\n      content:\n        \"Eres el asistente virtual del Centro de Competencias Digitales CCD. \" +\n        \"Responde en español colombiano, con tono claro, amable, institucional y cercano. \" +\n        \"Usa únicamente la información del contexto proporcionado. \" +\n        \"No inventes fechas, requisitos, nombres de cursos ni enlaces. \" +\n        \"Si la respuesta no está en el contexto, explica amablemente que no tienes información suficiente. \" +\n        \"Cuando sea útil, organiza la respuesta con viñetas. \" +\n        \"Evita respuestas demasiado largas. \" +\n        \"Cierra ofreciendo ayuda relacionada.\"\n    },\n    {\n      role: \"user\",\n      content:\n        \"Contexto documental:\\n\" + ($json.contexto || \"\") +\n        \"\\n\\nPregunta del usuario:\\n\" + ($json.pregunta_original || \"\")\n    }\n  ],\n  temperature: 0.25,\n  max_tokens: 450\n}) }}",
+        "options": {}
+      },
+      "id": "ccd-mejorado-0024",
+      "name": "HTTP Request - OpenRouter Generar respuesta RAG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2380,
+        1220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Code - Armar contexto RAG').first().json;\nconst respuesta = $json.choices?.[0]?.message?.content || $json.output_text || $json.text || $json.response || \"No pude generar una respuesta con la información disponible.\";\n\nreturn [{ json: { ...base, respuesta } }];"
+      },
+      "id": "ccd-mejorado-0025",
+      "name": "Code - Extraer respuesta OpenRouter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        1220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $input.first().json;\n\nreturn [\n  {\n    json: {\n      ...base,\n      respuesta: base.respuesta_directa || \"Por ahora no tengo suficiente información para responder eso con seguridad. Puedes preguntarme sobre cursos, calendario, eventos, noticias, certificación o tu historial académico.\"\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0026",
+      "name": "Code - Respuesta desconocido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        1420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO preguntas_sin_resolver (pregunta_original, pregunta_normalizada, intencion_detectada, canal)\nVALUES ($1, $2, $3, $4);",
+        "options": {
+          "queryReplacement": "={{ $json.pregunta_original }},{{ $json.pregunta_normalizada }},{{ $json.intencion }},{{ $json.canal }}"
+        }
+      },
+      "id": "ccd-mejorado-0027",
+      "name": "PostgreSQL - Log desconocido",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1600,
+        1520
+      ],
+      "disabled": true,
+      "credentials": {
+        "postgres": {
+          "name": "PostgreSQL CCD"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $input.first().json;\n\nlet respuesta = base.respuesta || base.respuesta_directa || \"\";\n\nif (!respuesta.trim()) {\n  respuesta =\n    `Lo siento, no pude generar una respuesta con la información disponible. 😊\\n\\n` +\n    `Puedes intentar reformular tu pregunta o consultarme sobre cursos, calendario, eventos, noticias o ruta CCD.`;\n}\n\nconst limite = 3500;\n\nif (respuesta.length > limite) {\n  respuesta = respuesta.slice(0, limite) + \"\\n\\n...Respuesta resumida por límite de longitud.\";\n}\n\nconst cierres = [\n  \"puedo ayudarte\",\n  \"también puedo ayudarte\",\n  \"aquí estaré\",\n  \"con gusto\"\n];\n\nconst tieneCierre = cierres.some(c => respuesta.toLowerCase().includes(c));\n\nif (!tieneCierre && ![\"agradecimiento\", \"despedida\"].includes(base.intencion)) {\n  respuesta += \"\\n\\nSi necesitas, también puedo ayudarte con otra consulta del CCD.\";\n}\n\nreturn [\n  {\n    json: {\n      ...base,\n      respuesta_final: respuesta,\n      respuesta\n    }\n  }\n];"
+      },
+      "id": "ccd-mejorado-0028",
+      "name": "Code - Pulir respuesta final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3060,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.respuesta_final || $json.respuesta }}",
+        "additionalFields": {}
+      },
+      "id": "ccd-mejorado-0029",
+      "name": "Telegram - Respuesta dinamica",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3320,
+        700
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram CCD Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code - Normalizar pregunta avanzada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Normalizar pregunta avanzada": {
+      "main": [
+        [
+          {
+            "node": "Code - Analizar contexto conversacional",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Analizar contexto conversacional": {
+      "main": [
+        [
+          {
+            "node": "Code - Detectar intención avanzada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Detectar intención avanzada": {
+      "main": [
+        [
+          {
+            "node": "Switch - Intencion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Intencion": {
+      "main": [
+        [
+          {
+            "node": "Code - Preparar respuesta directa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Preparar respuesta directa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Preparar respuesta directa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Preparar respuesta directa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL - Calendario",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Calendar - Consultar próximos eventos CCD",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL - Oferta cursos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Verificar codigo estudiante",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PostgreSQL - Noticias",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Preparar pregunta RAG",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Respuesta desconocido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar respuesta directa": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - Calendario": {
+      "main": [
+        [
+          {
+            "node": "Code - Formatear calendario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Formatear calendario": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar - Consultar próximos eventos CCD": {
+      "main": [
+        [
+          {
+            "node": "Code - Formatear eventos Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Formatear eventos Google Calendar": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - Oferta cursos": {
+      "main": [
+        [
+          {
+            "node": "Code - Formatear oferta cursos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Formatear oferta cursos": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Verificar codigo estudiante": {
+      "main": [
+        [
+          {
+            "node": "IF - Tiene codigo estudiante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Tiene codigo estudiante": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - Cursos estudiante",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Pedir codigo estudiante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Pedir codigo estudiante": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - Cursos estudiante": {
+      "main": [
+        [
+          {
+            "node": "Code - Formatear cursos estudiante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Formatear cursos estudiante": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - Noticias": {
+      "main": [
+        [
+          {
+            "node": "Code - Formatear noticias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Formatear noticias": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Preparar pregunta RAG": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - OpenRouter Embedding pregunta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - OpenRouter Embedding pregunta": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL - Buscar chunks similares",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL - Buscar chunks similares": {
+      "main": [
+        [
+          {
+            "node": "Code - Armar contexto RAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Armar contexto RAG": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - OpenRouter Generar respuesta RAG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - OpenRouter Generar respuesta RAG": {
+      "main": [
+        [
+          {
+            "node": "Code - Extraer respuesta OpenRouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extraer respuesta OpenRouter": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Respuesta desconocido": {
+      "main": [
+        [
+          {
+            "node": "Code - Pulir respuesta final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Pulir respuesta final": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Respuesta dinamica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "CCD-UNAB"
+    },
+    {
+      "name": "MVP-Mejorado"
+    }
+  ],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "ccd-unab-mvp-mejorado"
+  },
+  "active": false
+}

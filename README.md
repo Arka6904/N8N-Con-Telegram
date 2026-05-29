@@ -88,7 +88,7 @@ Construir un asistente conversacional que:
 - Consulta de noticias institucionales.
 - Búsqueda documental con PostgreSQL y pgvector.
 - Generación de embeddings mediante OpenRouter.
-- Generación de respuestas RAG usando contexto documental.
+- Generación de respuestas RAG usando contexto documental con múltiples modelos.
 - Nodo final de pulido para mantener tono institucional.
 - Registro opcional de preguntas sin resolver.
 - Arquitectura modular y mantenible.
@@ -167,12 +167,6 @@ Code - Pulir respuesta final
 Telegram - Respuesta dinamica
 ```
 
-El diseño separa tres tipos de respuesta:
-
-- Respuestas directas sin base de datos.
-- Consultas estructuradas sobre PostgreSQL.
-- Consultas documentales con RAG y OpenRouter.
-
 ---
 
 ## 🔁 Flujo conversacional
@@ -200,7 +194,7 @@ Cada mensaje recibido pasa por estas etapas:
 | `calendario` | Consulta de eventos en PostgreSQL |
 | `calendario_google` | Consulta de eventos en Google Calendar |
 | `oferta_cursos` | Consulta de cursos activos |
-| `cursos_estudiante` | Historial académico por código o ID |
+| `cursos_estudiante` | Historial académico por código UNAB o ID |
 | `noticias` | Noticias institucionales recientes |
 | `rag_documentos` | Preguntas documentales con RAG |
 | `desconocido` | Preguntas no clasificadas |
@@ -221,7 +215,7 @@ Cada mensaje recibido pasa por estas etapas:
 | PostgreSQL | Almacenamiento estructurado |
 | pgvector | Búsqueda vectorial para RAG |
 | Telegram Bot API | Canal de comunicación |
-| OpenRouter API | Embeddings y generación de respuestas |
+| OpenRouter API | Embeddings y generación de respuestas con múltiples modelos |
 | Google Calendar | Eventos opcionales |
 
 ---
@@ -229,15 +223,16 @@ Cada mensaje recibido pasa por estas etapas:
 ## 📁 Estructura del repositorio
 
 ```text
-ccd-chatbot/
+N8N-Con-Telegram/
+├── docs/
+│   ├── README_RAG.md
+│   ├── VALIDACION_RAG.md
+│   ├── diseno-flujo-n8n-chatbot-ccd-unab.md
+│   └── guia-implementacion-paso-a-paso.md
 ├── n8n/
 │   └── ccd-chatbot-flujo-principal-mvp-mejorado.json
-├── sql/
-│   ├── schema.sql
-│   └── datos_ejemplo.sql
-├── docs/
-│   └── arquitectura.png
-└── README.md
+├── README.md
+└── explicacion.md
 ```
 
 ---
@@ -288,9 +283,7 @@ N8N_PROXY_HOPS=1
 
 ## 🏢 Infraestructura
 
-La infraestructura se compone de:
-
-- **Azure VM:** servidor principal.
+- **Azure VM:** servidor principal con 4 núcleos, 8 GB RAM y 64 GB de almacenamiento.
 - **Ubuntu Server:** sistema operativo base.
 - **Docker:** ejecución de contenedores.
 - **Coolify:** administración de servicios.
@@ -351,28 +344,195 @@ La tabla de chunks usa una columna vectorial con dimensión 1536, correspondient
 embedding VECTOR(1536)
 ```
 
-El proyecto usa dos bases de datos:
-
-**Base de datos 1** — datos estructurados generales:
-- Calendario, oferta de cursos, noticias.
-
-**Base de datos 2** — datos reales y RAG:
-- Estudiantes, cursos por estudiante, documentos RAG, chunks, embeddings.
+El proyecto usa dos bases de datos separadas para mantener responsabilidades independientes.
 
 ---
 
 ## 📊 Modelo de datos
 
-| Tabla | Descripción |
-|-------|-------------|
-| `calendario_ccd` | Eventos o fechas institucionales |
-| `cursos_ccd` | Oferta de cursos activos |
-| `noticias_ccd` | Noticias disponibles para el chatbot |
-| `estudiante` | Información general del estudiante |
-| `cursos_estudiantes` | Cursos asociados al estudiante |
-| `documentos_rag` | Documentos fuente para RAG |
-| `document_chunks` | Fragmentos para búsqueda vectorial |
-| `preguntas_sin_resolver` | Registro opcional de preguntas no atendidas |
+El proyecto utiliza dos bases de datos:
+
+- **Base de datos 1**: almacena información general del chatbot como calendario, oferta de cursos, noticias y preguntas sin resolver.
+- **Base de datos 2**: almacena información académica, estudiantes, cursos realizados y documentos usados para RAG.
+
+### Base de datos 1
+
+#### Tabla `calendario_ccd`
+
+```sql
+CREATE TABLE IF NOT EXISTS calendario_ccd (
+    id SERIAL PRIMARY KEY,
+    evento TEXT NOT NULL,
+    fecha_inicio DATE,
+    fecha_fin DATE,
+    descripcion TEXT,
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Tabla `cursos_ccd`
+
+```sql
+CREATE TABLE IF NOT EXISTS cursos_ccd (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    categoria TEXT,
+    descripcion TEXT,
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Tabla `noticias_ccd`
+
+```sql
+CREATE TABLE IF NOT EXISTS noticias_ccd (
+    id SERIAL PRIMARY KEY,
+    titulo TEXT NOT NULL,
+    descripcion TEXT,
+    fecha_publicacion DATE,
+    enlace TEXT,
+    activo BOOLEAN DEFAULT TRUE,
+    disponible_chatbot BOOLEAN DEFAULT TRUE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Tabla `preguntas_sin_resolver`
+
+```sql
+CREATE TABLE IF NOT EXISTS preguntas_sin_resolver (
+    id SERIAL PRIMARY KEY,
+    pregunta_original TEXT,
+    pregunta_normalizada TEXT,
+    intencion_detectada TEXT,
+    canal TEXT,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Base de datos 2
+
+#### Tabla `estudiante`
+
+```sql
+CREATE TABLE IF NOT EXISTS estudiante (
+    id_estudiante BIGINT PRIMARY KEY,
+    codigo_unab TEXT UNIQUE,
+    nombre_completo TEXT NOT NULL,
+    programa_academico TEXT,
+    facultad TEXT,
+    anio_ingreso INTEGER,
+    semestre_actual INTEGER,
+    email TEXT,
+    telegram_id BIGINT,
+    telefono BIGINT,
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Tabla `cursos_estudiantes`
+
+```sql
+CREATE TABLE IF NOT EXISTS cursos_estudiantes (
+    id INTEGER PRIMARY KEY,
+    id_estudiante BIGINT,
+    codigo_materia TEXT,
+    codigo_curso INTEGER,
+    nombre_materia TEXT,
+    semestre TEXT,
+    anio INTEGER,
+    fecha_matricula DATE
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_cursos_estudiantes_unico
+ON cursos_estudiantes (id_estudiante, codigo_materia, codigo_curso);
+```
+
+#### Tabla `documentos_rag`
+
+```sql
+CREATE TABLE IF NOT EXISTS documentos_rag (
+    id SERIAL PRIMARY KEY,
+    nombre_documento TEXT,
+    categoria TEXT,
+    "text" TEXT,
+    embedding TEXT,
+    metadata TEXT,
+    fecha_ingestion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Tabla `document_chunks`
+
+```sql
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id BIGSERIAL PRIMARY KEY,
+    documento_id BIGINT,
+    chunk_index INTEGER NOT NULL,
+    chunk_text TEXT NOT NULL,
+    embedding VECTOR(1536),
+    metadata JSONB DEFAULT '{}'::jsonb,
+    creado_en TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_chunks_documento_id
+ON document_chunks(documento_id);
+
+CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding
+ON document_chunks
+USING ivfflat (embedding vector_cosine_ops)
+WITH (lists = 100);
+```
+
+### Generación de chunks documentales
+
+```sql
+INSERT INTO document_chunks (documento_id, chunk_index, chunk_text, metadata)
+SELECT
+    d.id AS documento_id,
+    gs.n AS chunk_index,
+    substring(d."text" FROM ((gs.n - 1) * 1200 + 1) FOR 1200) AS chunk_text,
+    jsonb_build_object(
+        'nombre_documento', d.nombre_documento,
+        'categoria', d.categoria,
+        'metadata_origen', d.metadata,
+        'fecha_ingestion', d.fecha_ingestion
+    ) AS metadata
+FROM documentos_rag d
+CROSS JOIN LATERAL generate_series(
+    1,
+    GREATEST(1, CEIL(length(d."text")::numeric / 1200)::int)
+) AS gs(n)
+WHERE d."text" IS NOT NULL
+  AND length(trim(d."text")) > 0
+  AND NOT EXISTS (
+      SELECT 1 FROM document_chunks dc WHERE dc.documento_id = d.id
+  );
+```
+
+### Permisos para el usuario de n8n
+
+**Base de datos 1:**
+
+```sql
+GRANT CONNECT ON DATABASE "Base de datos 1" TO ccd_n8n;
+GRANT USAGE ON SCHEMA public TO ccd_n8n;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO ccd_n8n;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ccd_n8n;
+```
+
+**Base de datos 2:**
+
+```sql
+GRANT CONNECT ON DATABASE "Base de datos 2" TO ccd_n8n;
+GRANT USAGE ON SCHEMA public TO ccd_n8n;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO ccd_n8n;
+GRANT UPDATE ON TABLE document_chunks TO ccd_n8n;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ccd_n8n;
+```
 
 ---
 
@@ -431,7 +591,7 @@ Code - Pulir respuesta final
 Telegram - Respuesta dinamica
 ```
 
-Consulta típica:
+Consulta:
 
 ```sql
 SELECT evento, fecha_inicio, fecha_fin, descripcion
@@ -453,7 +613,7 @@ Code - Pulir respuesta final
 Telegram - Respuesta dinamica
 ```
 
-Consulta típica:
+Consulta:
 
 ```sql
 SELECT nombre, categoria
@@ -487,21 +647,13 @@ Consulta parametrizada:
 
 ```sql
 SELECT 
-    e.codigo_unab,
-    e.id_estudiante,
-    e.nombre_completo,
-    e.programa_academico,
-    e.semestre_actual,
-    ce.codigo_materia,
-    ce.nombre_materia,
-    ce.semestre,
-    ce.anio,
-    ce.fecha_matricula
+    e.codigo_unab, e.id_estudiante, e.nombre_completo,
+    e.programa_academico, e.semestre_actual,
+    ce.codigo_materia, ce.nombre_materia, ce.semestre, ce.anio, ce.fecha_matricula
 FROM cursos_estudiantes ce
 JOIN estudiante e ON e.id_estudiante = ce.id_estudiante
-WHERE 
-    UPPER(e.codigo_unab) = UPPER($1)
-    OR e.id_estudiante::TEXT = $1
+WHERE UPPER(e.codigo_unab) = UPPER($1)
+   OR e.id_estudiante::TEXT = $1
 ORDER BY ce.anio, ce.codigo_curso;
 ```
 
@@ -517,7 +669,7 @@ Code - Pulir respuesta final
 Telegram - Respuesta dinamica
 ```
 
-Consulta típica:
+Consulta:
 
 ```sql
 SELECT titulo, fecha_publicacion, enlace
@@ -578,9 +730,11 @@ SELECT
 FROM document_chunks dc
 LEFT JOIN documentos_rag dr ON dr.id = dc.documento_id
 WHERE dc.embedding IS NOT NULL
-ORDER BY dc.embedding <-> '[VECTOR_DE_LA_PREGUNTA]'::vector
+ORDER BY dc.embedding <-> $1::vector
 LIMIT 5;
 ```
+
+El operador `<->` ordena por distancia vectorial (similitud coseno con índice ivfflat).
 
 ### Generación de respuesta con OpenRouter
 
@@ -590,13 +744,28 @@ Endpoint:
 https://openrouter.ai/api/v1/chat/completions
 ```
 
-Modelo configurado:
+El flujo soporta múltiples modelos configurables en OpenRouter. El modelo usado en producción es:
 
 ```text
 openai/gpt-4o-mini
 ```
 
-El prompt indica al modelo responder en español colombiano, usar tono claro e institucional, usar únicamente el contexto proporcionado y no inventar fechas, requisitos, cursos ni enlaces.
+Otros modelos compatibles probados:
+
+```text
+openai/gpt-4o
+anthropic/claude-3-haiku
+meta-llama/llama-3.1-8b-instruct
+deepseek/deepseek-chat-v3.1:free
+```
+
+El prompt indica al modelo:
+
+- Responder en español colombiano.
+- Usar tono claro, amable e institucional.
+- Usar únicamente el contexto documental proporcionado.
+- No inventar fechas, requisitos, cursos ni enlaces.
+- Indicar cuando no haya información suficiente.
 
 ---
 
@@ -721,7 +890,7 @@ Ver logs del contenedor n8n desde Coolify: abrir servicio n8n → Logs.
 ### OpenRouter devuelve error
 
 - Verificar `TU_API_KEY_OPENROUTER`.
-- Confirmar que el modelo esté disponible.
+- Confirmar que el modelo esté disponible en OpenRouter.
 - Revisar el formato del body en el nodo HTTP Request.
 
 ---
@@ -732,16 +901,19 @@ Ver logs del contenedor n8n desde Coolify: abrir servicio n8n → Logs.
 - El webhook de Telegram solo acepta peticiones HTTPS.
 - Los datos de estudiantes se consultan pero no se almacenan en logs.
 - Se recomienda restringir el acceso al editor de n8n por IP o contraseña fuerte.
+- Las credenciales de PostgreSQL se gestionan por separado para cada base de datos.
 
 ---
 
 ## 💰 Costos y límites
 
-- **OpenRouter:** costo por tokens usados en embeddings y generación de respuestas. El modelo `openai/gpt-4o-mini` tiene un costo muy bajo por consulta.
-- **Azure VM:** costo mensual según el tamaño de la VM seleccionada.
-- **Telegram:** gratuito sin límites de mensajes para bots.
-- **n8n self-hosted:** sin costo de licencia.
-- **PostgreSQL self-hosted:** sin costo de licencia.
+| Recurso | Costo aproximado |
+|---------|-----------------|
+| Azure VM (4 núcleos, 8 GB RAM, 64 GB) | ~50 USD/mes |
+| OpenRouter (gpt-4o-mini) | Muy bajo por consulta, según tokens |
+| Telegram | Gratuito sin límites para bots |
+| n8n self-hosted | Sin costo de licencia |
+| PostgreSQL self-hosted | Sin costo de licencia |
 
 ---
 
@@ -751,12 +923,12 @@ Ver logs del contenedor n8n desde Coolify: abrir servicio n8n → Logs.
 - Orquestación completa en n8n.
 - Clasificación de intención por reglas.
 - Respuestas directas para FAQ, saludos, agradecimientos y despedidas.
-- Consulta de calendario desde PostgreSQL.
+- Consulta de calendario desde PostgreSQL con fechas formateadas.
 - Consulta opcional de eventos desde Google Calendar.
-- Consulta de oferta de cursos.
-- Consulta de cursos por estudiante con código UNAB o ID.
-- Consulta de noticias institucionales.
-- RAG documental con pgvector y OpenRouter.
+- Consulta de oferta de cursos agrupada por categoría.
+- Consulta de cursos por estudiante con código UNAB o ID numérico.
+- Consulta de noticias institucionales con fecha formateada.
+- RAG documental con pgvector y OpenRouter con soporte a múltiples modelos.
 - Respuesta final pulida antes de enviarse al usuario.
 
 ---
@@ -776,6 +948,12 @@ Ver logs del contenedor n8n desde Coolify: abrir servicio n8n → Logs.
 ## 👥 Créditos
 
 Proyecto desarrollado para el **Centro de Competencias Digitales** de la **Universidad Autónoma de Bucaramanga — UNAB**, Colombia.
+
+**Equipo de desarrollo:**
+
+- Jorge Enrique Balaguera Cañas
+- Mariana Carolina Barragán Suárez
+- Daniel Restrepo
 
 ---
 

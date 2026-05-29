@@ -1,31 +1,144 @@
-# CCD UNAB - Chatbot Inteligente con n8n, PostgreSQL, Telegram y RAG
+# 🤖 CCD UNAB — Chatbot Inteligente con n8n, PostgreSQL, Telegram y RAG
 
-## 1. Título del proyecto
+### Centro de Competencias Digitales · Universidad Autónoma de Bucaramanga · Colombia
 
-**CCD UNAB - Chatbot Inteligente con n8n, PostgreSQL, Telegram y RAG**
+> Asistente conversacional institucional para el **Centro de Competencias Digitales CCD UNAB**.  
+> Funciona desde **Telegram**, se orquesta con **n8n**, consulta datos estructurados en **PostgreSQL**, realiza búsqueda vectorial con **pgvector** y genera respuestas documentales mediante **RAG** usando **OpenRouter**.
 
-Este proyecto implementa un chatbot institucional para el Centro de Competencias Digitales CCD UNAB. El asistente funciona desde Telegram, se orquesta con n8n, consulta información estructurada en PostgreSQL, utiliza búsqueda vectorial con pgvector y genera respuestas documentales mediante OpenRouter.
+![n8n](https://img.shields.io/badge/n8n-Automation-orange)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Vector%20DB-blue?logo=postgresql)
+![pgvector](https://img.shields.io/badge/pgvector-RAG-green)
+![Telegram](https://img.shields.io/badge/Telegram-Bot-blue?logo=telegram)
+![OpenRouter](https://img.shields.io/badge/OpenRouter-LLM-purple)
+![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)
+![License](https://img.shields.io/badge/Licencia-MIT-green)
 
-## 2. Descripción general
+---
 
-El chatbot permite atender preguntas frecuentes, saludos, despedidas, consultas de calendario, oferta de cursos, historial de cursos por estudiante, noticias y preguntas documentales mediante RAG.
+## 📋 Tabla de contenidos
 
-El flujo está diseñado para evitar llamadas innecesarias a modelos de lenguaje. Primero normaliza el mensaje, analiza el contexto conversacional, detecta la intención y enruta la pregunta a la rama correspondiente. Las respuestas pasan por un nodo final de pulido antes de enviarse por Telegram.
+1. [Descripción general](#-descripción-general)
+2. [Objetivo del proyecto](#-objetivo-del-proyecto)
+3. [Características principales](#-características-principales)
+4. [Arquitectura general](#-arquitectura-general)
+5. [Flujo conversacional](#-flujo-conversacional)
+6. [Intenciones soportadas](#-intenciones-soportadas)
+7. [Tecnologías utilizadas](#-tecnologías-utilizadas)
+8. [Estructura del repositorio](#-estructura-del-repositorio)
+9. [Requisitos previos](#-requisitos-previos)
+10. [Variables de entorno](#-variables-de-entorno)
+11. [Infraestructura](#-infraestructura)
+12. [Configuración de puertos](#-configuración-de-puertos)
+13. [Despliegue de n8n](#-despliegue-de-n8n)
+14. [Configuración de Telegram](#-configuración-de-telegram)
+15. [Configuración de PostgreSQL y pgvector](#-configuración-de-postgresql-y-pgvector)
+16. [Modelo de datos](#-modelo-de-datos)
+17. [Configuración de credenciales en n8n](#-configuración-de-credenciales-en-n8n)
+18. [Importar el workflow en n8n](#-importar-el-workflow-en-n8n)
+19. [Descripción de ramas del flujo](#-descripción-de-ramas-del-flujo)
+20. [Configuración RAG documental](#-configuración-rag-documental)
+21. [Pruebas desde Telegram](#-pruebas-desde-telegram)
+22. [Checklist de despliegue](#-checklist-de-despliegue)
+23. [Comandos útiles de diagnóstico](#-comandos-útiles-de-diagnóstico)
+24. [Solución de problemas frecuentes](#-solución-de-problemas-frecuentes)
+25. [Seguridad y privacidad](#-seguridad-y-privacidad)
+26. [Costos y límites](#-costos-y-límites)
+27. [Estado final del proyecto](#-estado-final-del-proyecto)
+28. [Próximas mejoras](#-próximas-mejoras)
+29. [Créditos](#-créditos)
+30. [Licencia](#-licencia)
 
-## 3. Objetivo del proyecto
+---
 
-El objetivo es construir un asistente conversacional que:
+## 📌 Descripción general
+
+Este proyecto implementa un chatbot institucional para el **Centro de Competencias Digitales CCD UNAB**.
+
+El asistente permite responder preguntas frecuentes, saludos, despedidas, consultas de calendario, oferta de cursos, historial de cursos por estudiante, noticias institucionales y preguntas documentales mediante un flujo RAG.
+
+El flujo está diseñado para evitar llamadas innecesarias a modelos de lenguaje. Primero normaliza el mensaje, analiza el contexto conversacional, detecta la intención y enruta la pregunta hacia la rama correspondiente. Finalmente, todas las respuestas pasan por un nodo de pulido antes de enviarse al usuario por Telegram.
+
+---
+
+## 🎯 Objetivo del proyecto
+
+Construir un asistente conversacional que:
 
 - Atienda consultas comunes del CCD de forma rápida.
+- Responda en un tono amable, claro e institucional.
 - Consulte datos estructurados desde PostgreSQL.
-- Permita buscar información documental usando RAG.
-- Responda en tono amable, claro e institucional.
-- Funcione como flujo importable y mantenible en n8n.
+- Permita buscar información documental mediante RAG.
 - Use Telegram como canal principal de interacción.
+- Sea importable, mantenible y extensible en n8n.
+- Reduzca llamadas innecesarias a modelos de lenguaje.
+- Permita diagnosticar errores mediante consultas SQL y logs de n8n.
 
-## 4. Arquitectura general
+---
 
-Arquitectura lógica del flujo final:
+## ✨ Características principales
+
+- Atención automática desde Telegram.
+- Orquestación visual con n8n.
+- Clasificación de intención mediante reglas.
+- Respuestas directas para saludos, agradecimientos, despedidas y preguntas frecuentes.
+- Consulta de calendario institucional desde PostgreSQL.
+- Consulta opcional de eventos desde Google Calendar.
+- Consulta de oferta activa de cursos CCD.
+- Consulta de cursos asociados a estudiantes por código UNAB o ID.
+- Consulta de noticias institucionales.
+- Búsqueda documental con PostgreSQL y pgvector.
+- Generación de embeddings mediante OpenRouter.
+- Generación de respuestas RAG usando contexto documental.
+- Nodo final de pulido para mantener tono institucional.
+- Registro opcional de preguntas sin resolver.
+- Arquitectura modular y mantenible.
+
+---
+
+## 🏗️ Arquitectura general
+
+```mermaid
+flowchart TD
+    A[Usuario en Telegram] --> B[Telegram Trigger]
+    B --> C[Code - Normalizar pregunta avanzada]
+    C --> D[Code - Analizar contexto conversacional]
+    D --> E[Code - Detectar intención avanzada]
+    E --> F{Switch - Intención}
+
+    F --> G[FAQ directa]
+    F --> H[Saludo]
+    F --> I[Agradecimiento]
+    F --> J[Despedida]
+    F --> K[Calendario PostgreSQL]
+    F --> L[Google Calendar]
+    F --> M[Oferta de cursos]
+    F --> N[Cursos por estudiante]
+    F --> O[Noticias]
+    F --> P[RAG documental]
+    F --> Q[Desconocido]
+
+    P --> R[OpenRouter - Embedding pregunta]
+    R --> S[PostgreSQL + pgvector - Buscar chunks similares]
+    S --> T[Code - Armar contexto RAG]
+    T --> U[OpenRouter - Generar respuesta RAG]
+
+    G --> V[Code - Pulir respuesta final]
+    H --> V
+    I --> V
+    J --> V
+    K --> V
+    L --> V
+    M --> V
+    N --> V
+    O --> V
+    U --> V
+    Q --> V
+
+    V --> W[Telegram - Respuesta dinámica]
+    W --> X[Usuario recibe respuesta]
+```
+
+Arquitectura lógica resumida:
 
 ```text
 Telegram Trigger
@@ -54,30 +167,82 @@ Code - Pulir respuesta final
 Telegram - Respuesta dinamica
 ```
 
-El diseño separa claramente tres tipos de respuesta:
+El diseño separa tres tipos de respuesta:
 
 - Respuestas directas sin base de datos.
 - Consultas estructuradas sobre PostgreSQL.
 - Consultas documentales con RAG y OpenRouter.
 
-## 5. Tecnologías utilizadas
+---
 
-- Azure VM
-- Ubuntu Server
-- Docker
-- Coolify
-- Traefik / Coolify Proxy
-- n8n
-- n8n Task Runners
-- PostgreSQL
-- pgvector
-- Telegram Bot API
-- OpenRouter API
-- Google Calendar opcional
-- JSON workflows
-- SQL
+## 🔁 Flujo conversacional
 
-## 6. Requisitos previos
+Cada mensaje recibido pasa por estas etapas:
+
+1. **Normalización:** limpieza del texto, detección de palabras clave, extracción de códigos.
+2. **Análisis de contexto:** detección de saludos, despedidas, agradecimientos, menciones de fechas o historial.
+3. **Detección de intención:** clasificación por reglas hacia una de las ramas del Switch.
+4. **Enrutamiento:** el Switch dirige el flujo a la rama correspondiente.
+5. **Respuesta:** cada rama genera un campo `respuesta`.
+6. **Pulido:** el nodo final ajusta tono, longitud y agrega cierres si faltan.
+7. **Envío:** Telegram recibe y entrega la respuesta al usuario.
+
+---
+
+## 🧭 Intenciones soportadas
+
+| Intención | Descripción |
+|-----------|-------------|
+| `faq_directa` | Preguntas frecuentes con respuesta predefinida |
+| `saludo` | Saludos del usuario |
+| `agradecimiento` | Expresiones de agradecimiento |
+| `despedida` | Despedidas del usuario |
+| `calendario` | Consulta de eventos en PostgreSQL |
+| `calendario_google` | Consulta de eventos en Google Calendar |
+| `oferta_cursos` | Consulta de cursos activos |
+| `cursos_estudiante` | Historial académico por código o ID |
+| `noticias` | Noticias institucionales recientes |
+| `rag_documentos` | Preguntas documentales con RAG |
+| `desconocido` | Preguntas no clasificadas |
+
+---
+
+## 🛠️ Tecnologías utilizadas
+
+| Tecnología | Uso |
+|------------|-----|
+| Azure VM | Servidor principal |
+| Ubuntu Server | Sistema operativo base |
+| Docker | Ejecución de contenedores |
+| Coolify | Administración de servicios |
+| Traefik / Coolify Proxy | Exposición HTTPS |
+| n8n | Motor de automatización y orquestación |
+| n8n Task Runners | Ejecución de código JavaScript |
+| PostgreSQL | Almacenamiento estructurado |
+| pgvector | Búsqueda vectorial para RAG |
+| Telegram Bot API | Canal de comunicación |
+| OpenRouter API | Embeddings y generación de respuestas |
+| Google Calendar | Eventos opcionales |
+
+---
+
+## 📁 Estructura del repositorio
+
+```text
+ccd-chatbot/
+├── n8n/
+│   └── ccd-chatbot-flujo-principal-mvp-mejorado.json
+├── sql/
+│   ├── schema.sql
+│   └── datos_ejemplo.sql
+├── docs/
+│   └── arquitectura.png
+└── README.md
+```
+
+---
+
+## ✅ Requisitos previos
 
 Antes de configurar el proyecto se requiere:
 
@@ -99,76 +264,11 @@ TU_PASSWORD_POSTGRES
 TU_DOMINIO_N8N
 ```
 
-## 7. Infraestructura usada
+---
 
-La infraestructura se compone de:
+## 🌐 Variables de entorno
 
-- **Azure VM:** servidor principal.
-- **Ubuntu Server:** sistema operativo base.
-- **Docker:** ejecución de contenedores.
-- **Coolify:** administración de servicios.
-- **Traefik / Coolify Proxy:** exposición HTTPS.
-- **n8n:** motor de automatización y orquestación.
-- **PostgreSQL:** almacenamiento de datos estructurados y documentos.
-- **pgvector:** búsqueda vectorial para RAG.
-
-## 8. Configuración de la VM y Coolify
-
-La VM se usa como servidor central para desplegar servicios con Docker y Coolify.
-
-Configuración general:
-
-1. Crear la VM en Azure.
-2. Instalar o habilitar Docker.
-3. Instalar Coolify.
-4. Acceder a Coolify desde el puerto público configurado.
-5. Crear los servicios necesarios:
-   - n8n.
-   - PostgreSQL.
-   - Servicios auxiliares si se requieren.
-
-Coolify permite administrar variables de entorno, dominios, certificados HTTPS y reinicios de contenedores desde una interfaz web.
-
-## 9. Configuración de puertos
-
-Puertos utilizados:
-
-```text
-80 TCP
-443 TCP
-8000 TCP
-```
-
-Uso de cada puerto:
-
-- **80 TCP:** tráfico HTTP gestionado por el proxy.
-- **443 TCP:** tráfico HTTPS gestionado por el proxy.
-- **8000 TCP:** acceso a la interfaz de Coolify.
-
-El puerto **5678** corresponde al puerto interno de n8n dentro del contenedor. No se usa como acceso público directo cuando n8n se expone mediante el proxy de Coolify.
-
-## 10. Despliegue de n8n
-
-El servicio n8n se despliega como aplicación Docker administrada por Coolify.
-
-Configuración general:
-
-1. Crear un nuevo servicio en Coolify.
-2. Seleccionar imagen de n8n.
-3. Configurar dominio público:
-
-```text
-https://TU_DOMINIO_N8N
-```
-
-4. Configurar variables de entorno.
-5. Habilitar HTTPS mediante el proxy de Coolify.
-6. Iniciar el servicio.
-7. Acceder al editor web de n8n.
-
-## 11. Variables de entorno de n8n
-
-Variables usadas:
+Variables de n8n:
 
 ```env
 N8N_PROTOCOL=https
@@ -184,273 +284,142 @@ N8N_RUNNERS_MODE=external
 N8N_PROXY_HOPS=1
 ```
 
-Estas variables permiten que n8n genere webhooks correctos, funcione detrás del proxy HTTPS y use zona horaria de Colombia.
+---
 
-## 12. Configuración HTTPS y webhook de Telegram
+## 🏢 Infraestructura
 
-Telegram requiere que el webhook del bot esté disponible por HTTPS.
+La infraestructura se compone de:
 
-El dominio público debe apuntar a n8n:
+- **Azure VM:** servidor principal.
+- **Ubuntu Server:** sistema operativo base.
+- **Docker:** ejecución de contenedores.
+- **Coolify:** administración de servicios.
+- **Traefik / Coolify Proxy:** exposición HTTPS.
+- **n8n:** motor de automatización y orquestación.
+- **PostgreSQL:** almacenamiento de datos estructurados y documentos.
+- **pgvector:** búsqueda vectorial para RAG.
 
-```text
-https://TU_DOMINIO_N8N/
-```
+---
 
-En n8n:
+## 🔌 Configuración de puertos
 
-1. Crear credencial de Telegram.
-2. Usar el token del bot:
+| Puerto | Uso |
+|--------|-----|
+| 80 TCP | Tráfico HTTP gestionado por el proxy |
+| 443 TCP | Tráfico HTTPS gestionado por el proxy |
+| 8000 TCP | Acceso a la interfaz de Coolify |
 
-```text
-TU_TOKEN_TELEGRAM
-```
+El puerto **5678** corresponde al puerto interno de n8n. No se expone directamente cuando n8n se publica mediante el proxy de Coolify.
 
+---
+
+## 🚀 Despliegue de n8n
+
+1. Crear un nuevo servicio en Coolify.
+2. Seleccionar imagen de n8n.
+3. Configurar dominio público: `https://TU_DOMINIO_N8N`
+4. Configurar variables de entorno.
+5. Habilitar HTTPS mediante el proxy de Coolify.
+6. Iniciar el servicio.
+7. Acceder al editor web de n8n.
+
+---
+
+## 💬 Configuración de Telegram
+
+Telegram requiere que el webhook esté disponible por HTTPS.
+
+1. Crear credencial de Telegram en n8n.
+2. Usar el token del bot: `TU_TOKEN_TELEGRAM`
 3. Configurar el nodo **Telegram Trigger**.
 4. Activar el workflow.
 5. Verificar que Telegram pueda entregar mensajes al webhook.
 
-## 13. Configuración de PostgreSQL y pgvector
+---
 
-PostgreSQL se usa para:
+## 🗄️ Configuración de PostgreSQL y pgvector
 
-- Datos del calendario.
-- Oferta de cursos.
-- Datos de estudiantes.
-- Noticias.
-- Documentos RAG.
-- Chunks documentales.
-- Embeddings vectoriales.
-
-pgvector se habilita con:
+Habilitar la extensión pgvector:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-La tabla de chunks usa una columna vectorial:
+La tabla de chunks usa una columna vectorial con dimensión 1536, correspondiente al modelo `openai/text-embedding-3-small`:
 
 ```sql
 embedding VECTOR(1536)
 ```
 
-La dimensión 1536 corresponde al modelo de embeddings `openai/text-embedding-3-small` usado mediante OpenRouter.
+El proyecto usa dos bases de datos:
 
-## 14. Bases de datos usadas
+**Base de datos 1** — datos estructurados generales:
+- Calendario, oferta de cursos, noticias.
 
-El proyecto usa dos bases:
+**Base de datos 2** — datos reales y RAG:
+- Estudiantes, cursos por estudiante, documentos RAG, chunks, embeddings.
 
-### Base de datos 1
+---
 
-Usada para datos estructurados generales del chatbot, por ejemplo:
+## 📊 Modelo de datos
 
-- Calendario.
-- Oferta de cursos.
-- Noticias.
-- Información operativa del MVP.
+| Tabla | Descripción |
+|-------|-------------|
+| `calendario_ccd` | Eventos o fechas institucionales |
+| `cursos_ccd` | Oferta de cursos activos |
+| `noticias_ccd` | Noticias disponibles para el chatbot |
+| `estudiante` | Información general del estudiante |
+| `cursos_estudiantes` | Cursos asociados al estudiante |
+| `documentos_rag` | Documentos fuente para RAG |
+| `document_chunks` | Fragmentos para búsqueda vectorial |
+| `preguntas_sin_resolver` | Registro opcional de preguntas no atendidas |
 
-### Base de datos 2
+---
 
-Usada para datos reales o enriquecidos, por ejemplo:
+## 🔑 Configuración de credenciales en n8n
 
-- Estudiantes.
-- Cursos por estudiante.
-- Documentos RAG.
-- Chunks documentales.
-- Embeddings.
+| Credencial | Nodos que la usan |
+|------------|-------------------|
+| Telegram CCD Bot | Telegram Trigger, Telegram - Respuesta dinamica |
+| PostgreSQL Base de datos 1 | Calendario, Oferta cursos, Noticias |
+| PostgreSQL Base de datos 2 | Cursos estudiante, Buscar chunks similares |
+| Google Calendar CCD | Google Calendar - Consultar próximos eventos CCD |
+| OpenRouter | HTTP Request - Embedding, HTTP Request - Generar respuesta RAG |
 
-En n8n se configuran como credenciales separadas para evitar mezclar responsabilidades.
+---
 
-## 15. Modelo de datos general
-
-Tablas principales:
-
-```text
-calendario_ccd
-cursos_ccd
-noticias_ccd
-estudiante
-cursos_estudiantes
-documentos_rag
-document_chunks
-preguntas_sin_resolver
-```
-
-Uso general:
-
-- `calendario_ccd`: eventos o fechas institucionales.
-- `cursos_ccd`: oferta de cursos.
-- `noticias_ccd`: noticias disponibles para el chatbot.
-- `estudiante`: información general del estudiante.
-- `cursos_estudiantes`: cursos asociados al estudiante.
-- `documentos_rag`: documentos fuente.
-- `document_chunks`: fragmentos para búsqueda vectorial.
-- `preguntas_sin_resolver`: registro opcional de preguntas no atendidas.
-
-## 16. Enriquecimiento de datos
-
-El enriquecimiento de datos consiste en preparar la información para que el chatbot pueda responder mejor:
-
-- Normalizar textos.
-- Cargar cursos y categorías.
-- Registrar eventos de calendario.
-- Cargar noticias.
-- Cargar documentos institucionales.
-- Dividir documentos en chunks.
-- Generar embeddings para cada chunk.
-
-Para RAG, cada documento se transforma en uno o más fragmentos dentro de `document_chunks`.
-
-## 17. Configuración de credenciales en n8n
-
-Credenciales necesarias:
-
-### Telegram CCD Bot
-
-Usada por:
-
-- `Telegram Trigger`
-- `Telegram - Respuesta dinamica`
-
-Valor requerido:
-
-```text
-TU_TOKEN_TELEGRAM
-```
-
-### PostgreSQL Base de datos 1
-
-Usada por:
-
-- `PostgreSQL - Calendario`
-- `PostgreSQL - Oferta cursos`
-- `PostgreSQL - Noticias`
-
-### PostgreSQL Base de datos 2
-
-Usada por:
-
-- `PostgreSQL - Cursos estudiante`
-- `PostgreSQL - Buscar chunks similares`
-
-### Google Calendar CCD
-
-Usada por:
-
-- `Google Calendar - Consultar próximos eventos CCD`
-
-### OpenRouter
-
-Usada por nodos HTTP:
-
-- `HTTP Request - OpenRouter Embedding pregunta`
-- `HTTP Request - OpenRouter Generar respuesta RAG`
-
-Placeholder:
-
-```text
-TU_API_KEY_OPENROUTER
-```
-
-## 18. Creación del flujo final en n8n
-
-El flujo final se crea importando el JSON del workflow en n8n.
-
-Pasos generales:
+## 📥 Importar el workflow en n8n
 
 1. Abrir n8n.
 2. Ir a **Workflows**.
 3. Seleccionar **Import from File**.
-4. Importar el workflow JSON.
-5. Revisar cada nodo.
-6. Asignar credenciales.
-7. Activar el workflow.
-
-Workflow final sugerido:
+4. Importar el archivo:
 
 ```text
 n8n/ccd-chatbot-flujo-principal-mvp-mejorado.json
 ```
 
-## 19. Configuración del flujo final en n8n
-
-Después de importar el workflow:
-
-1. Configurar `Telegram Trigger`.
-2. Configurar `Telegram - Respuesta dinamica`.
-3. Configurar credenciales PostgreSQL.
-4. Configurar OpenRouter en nodos HTTP.
-5. Configurar Google Calendar si se usará esa rama.
+5. Asignar credenciales a cada nodo.
 6. Revisar placeholders.
-7. Ejecutar pruebas manuales.
-8. Activar el workflow.
+7. Activar el workflow.
 
-El flujo debe terminar siempre en:
+---
 
-```text
-Code - Pulir respuesta final
-↓
-Telegram - Respuesta dinamica
-```
+## 🌿 Descripción de ramas del flujo
 
-## 20. Descripción de ramas del flujo
+### Rama FAQ, saludos y respuestas simples
 
-El nodo `Switch - Intencion` enruta hacia:
-
-```text
-faq_directa
-saludo
-agradecimiento
-despedida
-calendario
-calendario_google
-oferta_cursos
-cursos_estudiante
-noticias
-rag_documentos
-desconocido
-```
-
-Cada rama genera una respuesta parcial en el campo:
-
-```text
-respuesta
-```
-
-Luego el nodo `Code - Pulir respuesta final` produce:
-
-```text
-respuesta_final
-respuesta
-```
-
-## 21. Rama de FAQ, saludos y respuestas simples
-
-Las intenciones simples son:
-
-- `faq_directa`
-- `saludo`
-- `agradecimiento`
-- `despedida`
-
-Todas pasan por:
+Intenciones: `faq_directa`, `saludo`, `agradecimiento`, `despedida`
 
 ```text
 Code - Preparar respuesta directa
-```
-
-Este nodo toma `respuesta_directa` y la convierte en `respuesta`.
-
-Luego continúa hacia:
-
-```text
+↓
 Code - Pulir respuesta final
 ↓
 Telegram - Respuesta dinamica
 ```
 
-## 22. Rama de calendario
-
-La rama `calendario` consulta PostgreSQL:
+### Rama de calendario
 
 ```text
 PostgreSQL - Calendario
@@ -472,11 +441,7 @@ ORDER BY fecha_inicio
 LIMIT 5;
 ```
 
-Esta rama responde con fechas o eventos almacenados en Base de datos 1.
-
-## 23. Rama de oferta de cursos
-
-La rama `oferta_cursos` consulta la oferta activa:
+### Rama de oferta de cursos
 
 ```text
 PostgreSQL - Oferta cursos
@@ -497,16 +462,7 @@ WHERE activo = TRUE
 ORDER BY categoria, nombre;
 ```
 
-La respuesta agrupa cursos por categoría.
-
-## 24. Rama de consulta de estudiantes
-
-La rama `cursos_estudiante` revisa si el usuario envió:
-
-- Código UNAB.
-- ID de estudiante.
-
-Flujo:
+### Rama de consulta de estudiantes
 
 ```text
 Code - Verificar codigo estudiante
@@ -545,15 +501,11 @@ FROM cursos_estudiantes ce
 JOIN estudiante e ON e.id_estudiante = ce.id_estudiante
 WHERE 
     UPPER(e.codigo_unab) = UPPER($1)
-    OR e.id_estudiante::TEXT = $2
+    OR e.id_estudiante::TEXT = $1
 ORDER BY ce.anio, ce.codigo_curso;
 ```
 
-Esta rama usa Base de datos 2.
-
-## 25. Rama de noticias
-
-La rama `noticias` consulta noticias disponibles:
+### Rama de noticias
 
 ```text
 PostgreSQL - Noticias
@@ -575,18 +527,7 @@ ORDER BY fecha_publicacion DESC
 LIMIT 3;
 ```
 
-## 26. Rama RAG documental
-
-La rama `rag_documentos` se usa para preguntas sobre:
-
-- Certificación.
-- Insignias.
-- Ruta CCD.
-- Requisitos.
-- Documentos.
-- Información institucional no estructurada.
-
-Flujo:
+### Rama RAG documental
 
 ```text
 Code - Preparar pregunta RAG
@@ -606,9 +547,11 @@ Code - Pulir respuesta final
 Telegram - Respuesta dinamica
 ```
 
-## 27. Generación de embeddings
+---
 
-Los embeddings convierten texto en vectores numéricos.
+## 🧠 Configuración RAG documental
+
+### Generación de embeddings
 
 Modelo usado:
 
@@ -622,19 +565,9 @@ Endpoint:
 https://openrouter.ai/api/v1/embeddings
 ```
 
-La dimensión esperada es:
+Dimensión esperada: `1536`
 
-```text
-1536
-```
-
-Cada chunk documental debe tener un embedding almacenado en `document_chunks.embedding`.
-
-## 28. Búsqueda vectorial con pgvector
-
-La búsqueda vectorial compara el embedding de la pregunta contra los embeddings almacenados.
-
-Consulta típica:
+### Búsqueda vectorial con pgvector
 
 ```sql
 SELECT 
@@ -649,13 +582,9 @@ ORDER BY dc.embedding <-> '[VECTOR_DE_LA_PREGUNTA]'::vector
 LIMIT 5;
 ```
 
-El operador `<->` permite ordenar por distancia vectorial.
+### Generación de respuesta con OpenRouter
 
-## 29. Generación de respuesta con OpenRouter
-
-Después de recuperar los chunks relevantes, el flujo arma un contexto documental.
-
-Luego llama a:
+Endpoint:
 
 ```text
 https://openrouter.ai/api/v1/chat/completions
@@ -664,31 +593,14 @@ https://openrouter.ai/api/v1/chat/completions
 Modelo configurado:
 
 ```text
-deepseek/deepseek-chat-v3.1:free
+openai/gpt-4o-mini
 ```
 
-El prompt indica al modelo:
+El prompt indica al modelo responder en español colombiano, usar tono claro e institucional, usar únicamente el contexto proporcionado y no inventar fechas, requisitos, cursos ni enlaces.
 
-- Responder en español colombiano.
-- Usar tono claro e institucional.
-- Usar únicamente el contexto.
-- No inventar fechas, requisitos, cursos ni enlaces.
-- Indicar cuando no haya información suficiente.
+---
 
-## 30. Publicación del workflow
-
-Para publicar el workflow:
-
-1. Importar el JSON.
-2. Asignar credenciales.
-3. Verificar nodos con placeholders.
-4. Guardar cambios.
-5. Activar el workflow.
-6. Probar desde Telegram.
-
-Cuando el workflow está activo, Telegram envía mensajes al webhook de n8n.
-
-## 31. Pruebas en Telegram
+## 🧪 Pruebas desde Telegram
 
 Pruebas sugeridas:
 
@@ -716,93 +628,31 @@ Resultados esperados:
 - Cursos por estudiante consultan Base de datos 2.
 - RAG consulta documentos y responde con contexto.
 
-## 32. Errores comunes y soluciones
+---
 
-### Telegram no responde
+## ✅ Checklist de despliegue
 
-Posibles causas:
+- [ ] VM disponible con Docker y Coolify.
+- [ ] n8n desplegado con HTTPS.
+- [ ] PostgreSQL con pgvector habilitado.
+- [ ] Tablas creadas en ambas bases de datos.
+- [ ] Chunks cargados con embeddings.
+- [ ] Bot de Telegram creado en BotFather.
+- [ ] Credenciales configuradas en n8n.
+- [ ] Workflow importado y activado.
+- [ ] Pruebas realizadas desde Telegram.
 
-- Workflow inactivo.
-- Webhook HTTPS incorrecto.
-- Credencial Telegram no asignada.
-- Dominio mal configurado.
+---
 
-Solución:
-
-- Revisar que el workflow esté activo.
-- Confirmar `WEBHOOK_URL`.
-- Verificar credencial `Telegram CCD Bot`.
-
-### Error en PostgreSQL
-
-Posibles causas:
-
-- Credencial incorrecta.
-- Tabla inexistente.
-- Consulta apuntando a la base equivocada.
-
-Solución:
-
-- Revisar credenciales de Base de datos 1 y Base de datos 2.
-- Verificar existencia de tablas.
-- Ejecutar consulta manualmente desde PostgreSQL.
-
-### RAG no devuelve contexto
-
-Posibles causas:
-
-- Chunks sin embeddings.
-- Tabla `document_chunks` vacía.
-- Dimensión del vector incorrecta.
-- API de embeddings no respondió correctamente.
-
-Solución:
-
-- Verificar cantidad de chunks.
-- Verificar `COUNT(embedding)`.
-- Confirmar dimensión `VECTOR(1536)`.
-- Revisar respuesta del nodo OpenRouter embeddings.
-
-### Google Calendar no devuelve eventos
-
-Posibles causas:
-
-- Calendar ID incorrecto.
-- Credencial no asignada.
-- No hay eventos próximos.
-- Permisos insuficientes sobre el calendario.
-
-Solución:
-
-- Revisar `REEMPLAZA_CALENDAR_ID_CCD`.
-- Confirmar credencial `Google Calendar CCD`.
-- Probar el nodo manualmente en n8n.
-
-### OpenRouter devuelve error
-
-Posibles causas:
-
-- API key incorrecta.
-- Modelo no disponible.
-- Formato del body inválido.
-
-Solución:
-
-- Revisar placeholder `TU_API_KEY_OPENROUTER`.
-- Probar otro modelo compatible.
-- Revisar el nodo HTTP Request.
-
-## 33. Comandos útiles de diagnóstico
+## 🔧 Comandos útiles de diagnóstico
 
 Verificar extensión pgvector:
 
 ```sql
-SELECT extname
-FROM pg_extension
-WHERE extname = 'vector';
+SELECT extname FROM pg_extension WHERE extname = 'vector';
 ```
 
-Verificar chunks:
+Verificar chunks con embeddings:
 
 ```sql
 SELECT
@@ -811,23 +661,21 @@ SELECT
 FROM document_chunks;
 ```
 
-Verificar cursos:
+Verificar cursos activos:
 
 ```sql
-SELECT COUNT(*)
-FROM cursos_ccd;
+SELECT COUNT(*) FROM cursos_ccd;
 ```
 
-Verificar noticias:
+Verificar noticias disponibles:
 
 ```sql
 SELECT COUNT(*)
 FROM noticias_ccd
-WHERE activo = TRUE
-  AND disponible_chatbot = TRUE;
+WHERE activo = TRUE AND disponible_chatbot = TRUE;
 ```
 
-Verificar calendario:
+Verificar próximos eventos:
 
 ```sql
 SELECT evento, fecha_inicio
@@ -837,15 +685,67 @@ ORDER BY fecha_inicio
 LIMIT 5;
 ```
 
-Ver logs del contenedor n8n desde Coolify:
+Ver logs del contenedor n8n desde Coolify: abrir servicio n8n → Logs.
 
-```text
-Abrir servicio n8n → Logs
-```
+---
 
-## 34. Estado final del proyecto
+## 🛠️ Solución de problemas frecuentes
 
-Estado logrado:
+### Telegram no responde
+
+- Verificar que el workflow esté activo.
+- Confirmar `WEBHOOK_URL` en variables de entorno.
+- Verificar credencial `Telegram CCD Bot` en n8n.
+- Confirmar que el dominio tenga HTTPS válido.
+
+### Error en PostgreSQL
+
+- Revisar credenciales de Base de datos 1 y Base de datos 2.
+- Verificar existencia de tablas.
+- Ejecutar la consulta manualmente desde PostgreSQL.
+
+### RAG no devuelve contexto
+
+- Verificar cantidad de chunks con embeddings.
+- Confirmar dimensión `VECTOR(1536)`.
+- Revisar respuesta del nodo OpenRouter embeddings.
+- Verificar que la tabla `document_chunks` no esté vacía.
+
+### Google Calendar no devuelve eventos
+
+- Revisar el Calendar ID configurado.
+- Confirmar credencial `Google Calendar CCD`.
+- Verificar que haya eventos próximos en el calendario.
+- Confirmar permisos de la cuenta Google sobre el calendario.
+
+### OpenRouter devuelve error
+
+- Verificar `TU_API_KEY_OPENROUTER`.
+- Confirmar que el modelo esté disponible.
+- Revisar el formato del body en el nodo HTTP Request.
+
+---
+
+## 🔒 Seguridad y privacidad
+
+- Las API Keys se almacenan como credenciales en n8n, no en el código.
+- El webhook de Telegram solo acepta peticiones HTTPS.
+- Los datos de estudiantes se consultan pero no se almacenan en logs.
+- Se recomienda restringir el acceso al editor de n8n por IP o contraseña fuerte.
+
+---
+
+## 💰 Costos y límites
+
+- **OpenRouter:** costo por tokens usados en embeddings y generación de respuestas. El modelo `openai/gpt-4o-mini` tiene un costo muy bajo por consulta.
+- **Azure VM:** costo mensual según el tamaño de la VM seleccionada.
+- **Telegram:** gratuito sin límites de mensajes para bots.
+- **n8n self-hosted:** sin costo de licencia.
+- **PostgreSQL self-hosted:** sin costo de licencia.
+
+---
+
+## 📦 Estado final del proyecto
 
 - Chatbot funcionando sobre Telegram.
 - Orquestación completa en n8n.
@@ -854,14 +754,14 @@ Estado logrado:
 - Consulta de calendario desde PostgreSQL.
 - Consulta opcional de eventos desde Google Calendar.
 - Consulta de oferta de cursos.
-- Consulta de cursos por estudiante.
-- Consulta de noticias.
+- Consulta de cursos por estudiante con código UNAB o ID.
+- Consulta de noticias institucionales.
 - RAG documental con pgvector y OpenRouter.
 - Respuesta final pulida antes de enviarse al usuario.
 
-## 35. Próximas mejoras
+---
 
-Mejoras posibles:
+## 🔮 Próximas mejoras
 
 - Agregar memoria conversacional por usuario.
 - Registrar métricas de preguntas frecuentes.
@@ -870,4 +770,15 @@ Mejoras posibles:
 - Agregar más fuentes documentales al RAG.
 - Implementar evaluación automática de calidad de respuestas.
 - Crear pruebas automatizadas del workflow.
- 
+
+---
+
+## 👥 Créditos
+
+Proyecto desarrollado para el **Centro de Competencias Digitales** de la **Universidad Autónoma de Bucaramanga — UNAB**, Colombia.
+
+---
+
+## 📄 Licencia
+
+Este proyecto está bajo la licencia **MIT**. Puedes usarlo, modificarlo y distribuirlo libremente con atribución.
